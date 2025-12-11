@@ -277,14 +277,13 @@ function draw() {
   ship.update();
   ship.edges();
   if (nextScene == true) {
-    print('wow!');
     //go asteroid scene
     currentScene = 1;
     reset();
     }
   }
-  
-  
+
+
   //Saturn Scene
   if (currentScene == 3) {
     image(img_Saturn, width - 800, height/2-400);
