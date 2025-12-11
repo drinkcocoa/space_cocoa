@@ -51,13 +51,11 @@ function setup() {
 
 function draw() {
   background(0, 65);
-  print(Scene_nums);
-  
+
   if (letsgo == true && currentScene != -1) {
     fill(255)
     text('GO -->', width/2, 50);
     }
-  print(dia_next)
   //Title scene
     if (currentScene == -1) {
       letsgo = true;
@@ -73,7 +71,6 @@ function draw() {
   ship.update();
   ship.edges();
   if (nextScene == true) {
-    print('wow!');
     currentScene++;
     reset();
   }
@@ -142,12 +139,10 @@ function draw() {
 
   }
     
-    
+
     //sceneswitcher
   if (nextScene == true) {
-    print('wow!');
     currentScene++;
-
     reset();
   }
       ship.render();
@@ -163,7 +158,6 @@ function draw() {
 
   for (var i = 0; i < asteroids.length; i++) {
     if (ship.hits(asteroids[i])) {
-      console.log('ooops!');
       stun = true;
       stunned();
       
@@ -193,15 +187,13 @@ function draw() {
     }
   }
 
-  console.log(lasers.length);
-
   ship.render();
   ship.turn();
   ship.update();
   ship.edges();
-  
+
+
   if (nextScene == true) {
-    print('wow!');
     if (max(Scene_nums) > -1) {
       //go to next Scene
       saveScene();
@@ -568,40 +560,40 @@ function draw() {
     if (currentScene == 7) {
       letsgo = true;
     image(img_Saturn, width - 800, height/2-400);
-    
-    
+
+
         //dialog trigger
   if (ship.pos.x > width/2) {
     text('What a good boy!', width - 500- 40, height/2-50 - 100);
-        
+  }
+
   ship.render();
   ship.turn();
   ship.update();
   ship.edges();
   if (nextScene == true) {
-    print('wow!');
     //go asteroid scene
     currentScene = 1;
     reset();
     }
   }
-  
+
     //second Uranus scene
     if(currentScene == 8) {
       letsgo = true;
     image(img_Uranus, width - 300, height/2-100);
-    
-    
+
+
         //dialog trigger
   if (ship.pos.x > width/2) {
     text('That looks delicious!', width - 300- 40, height/2-50 - 100);
-        
+  }
+
   ship.render();
   ship.turn();
   ship.update();
   ship.edges();
   if (nextScene == true) {
-    print('wow!');
     //go asteroid scene
     currentScene = 1;
     reset();
@@ -668,25 +660,17 @@ function draw() {
     
     pop();
 
-      }
-    }
   }
-      
-    
-    
-    //sceneswitcher
-  if (nextScene == true) {
-    print('wow!');
-    currentScene++;
 
-    reset();
-  }
-      ship.render();
+  ship.render();
   ship.turn();
   ship.update();
   ship.edges();
-    
-    
+
+  if (nextScene == true) {
+    currentScene++;
+    reset();
+  }
   }
 }
 
@@ -725,8 +709,6 @@ function reset() {
 //go to the next Scene
 function saveScene() {
   currentScene = max(Scene_nums) + 1;
-    print('haha!')
-  
 }
 
 //load fonts
@@ -757,8 +739,9 @@ function windowResized() {
 function stunned() {
   if (stun == true) {
     myTime += deltaTime;
-    if (myTime % 2000 == 0) {
+    if (myTime >= 2000) {
       stun = false;
+      myTime = 0;
     }
   }
 }
