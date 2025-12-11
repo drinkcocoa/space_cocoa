@@ -712,22 +712,22 @@ function saveScene() {
 
 //load fonts
 function fontload() {
-    Cookie_font = loadFont('CookieRun_bold.ttf');
-    Cookie_thin_font = loadFont('CookieRun.ttf');
+    Cookie_font = loadFont('assets/fonts/CookieRun_bold.ttf');
+    Cookie_thin_font = loadFont('assets/fonts/CookieRun.ttf');
 }
 
 //load images
 function imageload() {
-  img_Star = loadImage('Star.png');
-  img_starcocoa = loadImage('starcocoa.png')
-  img_Saturn = loadImage('Saturn.png');
-  img_Neptune = loadImage('Neptune.png');
-  img_Uranus = loadImage('Uranus.png');
-  img_Earth = loadImage('Earth.png');
-  img_Sun = loadImage('Sun.png');
-  img_Sunlight = loadImage('Sunlight.png');
-  img_onlycocoa = loadImage('onlycocoa.png');
-  img_hurtstar = loadImage('hurtstar.png');
+  img_Star = loadImage('assets/images/Star.png');
+  img_starcocoa = loadImage('assets/images/starcocoa.png')
+  img_Saturn = loadImage('assets/images/Saturn.png');
+  img_Neptune = loadImage('assets/images/Neptune.png');
+  img_Uranus = loadImage('assets/images/Uranus.png');
+  img_Earth = loadImage('assets/images/Earth.png');
+  img_Sun = loadImage('assets/images/Sun.png');
+  img_Sunlight = loadImage('assets/images/Sunlight.png');
+  img_onlycocoa = loadImage('assets/images/onlycocoa.png');
+  img_hurtstar = loadImage('assets/images/hurtstar.png');
 }
 
 
