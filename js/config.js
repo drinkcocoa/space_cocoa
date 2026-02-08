@@ -3,14 +3,21 @@ const CONFIG = {
   // Game settings
   game: {
     asteroidCount: 15,
-    stunDuration: 2000,
+    stunDuration: 250,
     fadeAlpha: 65,
     shipSize: 20,
     laserSpeed: 10,
     shipRotationSpeed: 0.1,
     shipBoostForce: 0.1,
     velocityDamping: 0.99,
-    stunVelocityDamping: 0.09
+    stunVelocityDamping: 0.94,
+    hitDamage: 10,
+    hitCooldownDuration: 600,
+    hitFlashDuration: 160,
+    hitFlashAlpha: 110,
+    hitShakeDuration: 200,
+    hitShakeIntensity: 7,
+    hitKnockbackForce: 2.8
   },
 
   // Scene IDs
@@ -155,10 +162,10 @@ const CONFIG = {
   ui: {
     title: 'Space Cocoa~',
     controls: 'Press Arrow key to move!',
-    progressHint: 'Mouse click to progress',
+    progressHint: 'Press SPACE to progress',
     goPrompt: 'GO -->',
     dialogHint: 'say hello in here!',
-    fireHint: 'Press SPACE to fire lasers!',
+    fireHint: 'Press SPACE to continue dialog',
     pauseHint: 'Press P to pause'
   }
 };

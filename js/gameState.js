@@ -114,7 +114,7 @@ class GameState {
   renderUI() {
     push();
     fill(255);
-    textFont(Cookie_thin_font);
+    textFont(cookieThinFont);
     textSize(18);
     textAlign(LEFT);
 
@@ -178,12 +178,12 @@ class GameState {
 
     // Pause text
     fill(255);
-    textFont(Cookie_font);
+    textFont(cookieFont);
     textSize(48);
     textAlign(CENTER);
     text('PAUSED', width / 2, height / 2 - 50);
 
-    textFont(Cookie_thin_font);
+    textFont(cookieThinFont);
     textSize(24);
     text('Press P to resume', width / 2, height / 2 + 20);
     text('Press R to restart', width / 2, height / 2 + 60);
@@ -200,7 +200,7 @@ class GameState {
     rect(0, 0, width, height);
 
     fill(255);
-    textFont(Cookie_font);
+    textFont(cookieFont);
     textSize(56);
     textAlign(CENTER);
 
@@ -218,7 +218,7 @@ class GameState {
       text('You ran out of health!', width / 2, height / 2 - 40);
     }
 
-    textFont(Cookie_thin_font);
+    textFont(cookieThinFont);
     textSize(28);
     text(`Final Score: ${this.score}`, width / 2, height / 2 + 20);
     text(`Time: ${this.getPlayTimeFormatted()}`, width / 2, height / 2 + 60);

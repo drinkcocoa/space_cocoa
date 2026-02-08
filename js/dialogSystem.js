@@ -49,7 +49,6 @@ class DialogSystem {
 
     const dialogData = this.getCurrentText();
     if (!dialogData) {
-      this.end();
       return;
     }
 
@@ -112,7 +111,7 @@ class DialogSystem {
     textSize(16);
     fill(255, 80);
     noStroke();
-    textFont(Cookie_thin_font);
+    textFont(cookieThinFont);
     text(CONFIG.ui.dialogHint, triggerX + triggerW / 2, triggerY + triggerH + 20);
     pop();
   }

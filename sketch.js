@@ -21,6 +21,9 @@ let images = {};
 // Stun state
 let stun = false;
 let stunTimer = 0;
+let hitCooldownTimer = 0;
+let hitFlashTimer = 0;
+let hitShakeTimer = 0;
 
 function preload() {
   loadAssets();
@@ -62,12 +65,27 @@ function draw() {
     return;
   }
 
-  // Update and render particles
-  particleSystem.update();
-  particleSystem.render();
+  updateHitFeedback();
 
   // Route to current scene
   const scene = sceneManager.getCurrentScene();
+  const shouldShake = scene === CONFIG.scenes.ASTEROID && hitShakeTimer > 0;
+
+  if (shouldShake) {
+    const shakeStrength = map(
+      hitShakeTimer,
+      0,
+      CONFIG.game.hitShakeDuration,
+      0,
+      CONFIG.game.hitShakeIntensity
+    );
+    push();
+    translate(random(-shakeStrength, shakeStrength), random(-shakeStrength, shakeStrength));
+  }
+
+  // Update and render particles
+  particleSystem.update();
+  particleSystem.render();
 
   switch(scene) {
     case CONFIG.scenes.TITLE:
@@ -107,6 +125,12 @@ function draw() {
       renderNeptuneReturnScene();
       break;
   }
+
+  if (shouldShake) {
+    pop();
+  }
+
+  renderHitFlash();
 
   // Render UI
   gameState.renderUI();
@@ -175,7 +199,7 @@ function renderPlanetScene(planetKey, planetImage, trembles, nextDialogKey = nul
   if (ship.pos.x > triggerZone.x && ship.pos.x < triggerZone.x + triggerZone.w &&
       ship.pos.y > triggerZone.y && ship.pos.y < triggerZone.y + triggerZone.h) {
 
-    if (!dialogSystem.isActive()) {
+    if (!sceneManager.isReadyToGo() && !dialogSystem.isActive()) {
       dialogSystem.start(planetKey);
     }
 
@@ -204,15 +228,12 @@ function renderPlanetScene(planetKey, planetImage, trembles, nextDialogKey = nul
 
 function renderAsteroidScene() {
   sceneManager.setReadyToGo(true);
+  handleStun();
 
   // Update asteroids
   for (let i = 0; i < asteroids.length; i++) {
-    if (ship.hits(asteroids[i])) {
-      stun = true;
-      gameState.takeDamage(10);
-      soundManager.playHit();
-      particleSystem.addExplosion(ship.pos.x, ship.pos.y, 10, color(255, 100, 100));
-      handleStun();
+    if (ship.hits(asteroids[i]) && hitCooldownTimer <= 0) {
+      triggerShipHit(asteroids[i]);
     }
     asteroids[i].render();
     asteroids[i].update();
@@ -267,7 +288,7 @@ function renderSunScene() {
   if (ship.pos.x > triggerZone.x && ship.pos.x < triggerZone.x + triggerZone.w &&
       ship.pos.y > triggerZone.y && ship.pos.y < triggerZone.y + triggerZone.h) {
 
-    if (!dialogSystem.isActive()) {
+    if (!sceneManager.isReadyToGo() && !dialogSystem.isActive()) {
       dialogSystem.start('sun');
     }
 
@@ -363,13 +384,14 @@ function renderNeptuneReturnScene() {
   if (ship.pos.x > triggerZone.x && ship.pos.x < triggerZone.x + triggerZone.w &&
       ship.pos.y > triggerZone.y && ship.pos.y < triggerZone.y + triggerZone.h) {
 
-    if (!dialogSystem.isActive()) {
+    if (!sceneManager.isReadyToGo() && !dialogSystem.isActive()) {
       dialogSystem.start('neptuneReturn');
     }
 
     dialogSystem.render(ship.pos, { x: width - 300, y: height/2 - 50 }, { x: trembleX, y: trembleY });
 
     if (dialogSystem.isComplete()) {
+      sceneManager.setReadyToGo(true);
       gameState.win();
       dialogSystem.end();
     }
@@ -398,9 +420,67 @@ function updateShip() {
   }
 }
 
+function getFrameDeltaMs() {
+  if (typeof window.deltaTime === 'number' && isFinite(window.deltaTime)) {
+    return window.deltaTime;
+  }
+  return 1000 / 60;
+}
+
+function updateHitFeedback() {
+  const frameDelta = getFrameDeltaMs();
+
+  if (hitCooldownTimer > 0) {
+    hitCooldownTimer = max(0, hitCooldownTimer - frameDelta);
+  }
+  if (hitFlashTimer > 0) {
+    hitFlashTimer = max(0, hitFlashTimer - frameDelta);
+  }
+  if (hitShakeTimer > 0) {
+    hitShakeTimer = max(0, hitShakeTimer - frameDelta);
+  }
+}
+
+function renderHitFlash() {
+  if (hitFlashTimer <= 0) {
+    return;
+  }
+
+  push();
+  noStroke();
+  const alpha = map(
+    hitFlashTimer,
+    0,
+    CONFIG.game.hitFlashDuration,
+    0,
+    CONFIG.game.hitFlashAlpha
+  );
+  fill(255, 40, 40, alpha);
+  rect(0, 0, width, height);
+  pop();
+}
+
+function triggerShipHit(asteroid) {
+  stun = true;
+  stunTimer = 0;
+  hitCooldownTimer = CONFIG.game.hitCooldownDuration;
+  hitFlashTimer = CONFIG.game.hitFlashDuration;
+  hitShakeTimer = CONFIG.game.hitShakeDuration;
+  gameState.takeDamage(CONFIG.game.hitDamage);
+  soundManager.playHit();
+  particleSystem.addExplosion(ship.pos.x, ship.pos.y, 10, color(255, 100, 100));
+
+  const knockback = p5.Vector.sub(ship.pos, asteroid.pos);
+  if (knockback.magSq() > 0) {
+    knockback.setMag(CONFIG.game.hitKnockbackForce);
+    ship.vel.add(knockback);
+  }
+}
+
 function handleStun() {
   if (stun) {
-    stunTimer += deltaTime;
+    const frameDelta = getFrameDeltaMs();
+    stunTimer += frameDelta;
     if (stunTimer >= CONFIG.game.stunDuration) {
       stun = false;
       stunTimer = 0;
@@ -412,6 +492,15 @@ function resetSceneState() {
   sceneManager.setReadyToGo(false);
   dialogSystem.end();
   sceneManager.reset();
+  resetHitFeedback();
+}
+
+function resetHitFeedback() {
+  stun = false;
+  stunTimer = 0;
+  hitCooldownTimer = 0;
+  hitFlashTimer = 0;
+  hitShakeTimer = 0;
 }
 
 function keyReleased() {
@@ -422,8 +511,9 @@ function keyReleased() {
 function keyPressed() {
   // Game controls
   if (key === ' ') {
-    lasers.push(new Laser(ship.pos, ship.heading));
-    soundManager.playLaser();
+    if (dialogSystem.isActive()) {
+      dialogSystem.next();
+    }
   } else if (keyCode === RIGHT_ARROW) {
     ship.setRotation(CONFIG.game.shipRotationSpeed);
   } else if (keyCode === LEFT_ARROW) {
@@ -450,12 +540,6 @@ function keyPressed() {
   }
 }
 
-function mousePressed() {
-  if (dialogSystem.isActive()) {
-    dialogSystem.next();
-  }
-}
-
 function restartGame() {
   // Reset all systems
   gameState.restart();
@@ -471,8 +555,7 @@ function restartGame() {
     asteroids.push(new Asteroid());
   }
 
-  stun = false;
-  stunTimer = 0;
+  resetHitFeedback();
 
   gameState.startTime = millis();
   soundManager.playMusic();
@@ -551,9 +634,6 @@ function setupTouchControls() {
       e.preventDefault();
       if (dialogSystem.isActive()) {
         dialogSystem.next();
-      } else {
-        lasers.push(new Laser(ship.pos, ship.heading));
-        soundManager.playLaser();
       }
     });
   }

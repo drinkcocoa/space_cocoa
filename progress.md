@@ -1,0 +1,28 @@
+Original prompt: Something is off and things are not working. Test and find out what's the problem.
+
+- Initialized diagnostic session.
+- Confirmed local environment has Node and npx.
+- Confirmed web game Playwright client exists at ~/.codex/skills/develop-web-game/scripts/web_game_playwright_client.js.
+- Ran Playwright smoke test (`web_game_playwright_client.js`) against http://localhost:5173.
+- Reproduced runtime failure: `ReferenceError: Cookie_thin_font is not defined` (captured in `output/web-game/errors-0.json`).
+- Fixed font variable mismatches in `/js/gameState.js` and `/js/dialogSystem.js` by replacing legacy names with `cookieFont` / `cookieThinFont`.
+- Re-ran Playwright smoke test after fix; no `errors-*.json` generated in `output/web-game`.
+- Captured gameplay screenshots: `output/web-game/shot-0.png`, `shot-1.png`, `shot-2.png`.
+- Fixed dialog retrigger loop by gating dialog start with `!sceneManager.isReadyToGo()` in planet/sun/final-neptune scenes.
+- Set final Neptune dialog completion to `sceneManager.setReadyToGo(true)` before ending dialog, preventing immediate restart in trigger zone.
+- Changed dialog progression input from mouse click to `Space` in `keyPressed()`.
+- Removed temporary laser firing from `Space` and touch-fire fallback branch.
+- Updated UI hints to `Press SPACE to progress` and `Press SPACE to continue dialog`.
+- Fixed root cause of dialog restart trap: `DialogSystem.render()` no longer calls `end()` when `getCurrentText()` is null.
+- Verified logic with a Node VM simulation: after final `next()`, `render()` preserves `isComplete() === true` so scene code can set `readyToGo` and end exactly once.
+- Reproduced user-reported freeze root cause in asteroid scene: `handleStun()` referenced `deltaTime` directly, causing `ReferenceError` and halting `draw()` on first collision.
+- Fixed stun flow in `sketch.js`: call `handleStun()` once per asteroid-scene frame and use a safe `window.deltaTime` fallback (`1000/60`) to avoid runtime crashes.
+- Reworked asteroid-hit feedback to avoid freeze-like behavior:
+  - Added hit cooldown (`hitCooldownDuration`) so overlapping collision does not apply damage every frame.
+  - Added hit knockback (`hitKnockbackForce`) and shorter slowdown window (`stunDuration` + milder `stunVelocityDamping`).
+  - Added impact feedback timers for flash/shake (`hitFlashDuration`, `hitShakeDuration`) and rendering in `draw()`.
+  - Added centralized timer updates (`updateHitFeedback`) and reset helper (`resetHitFeedback`) for scene transitions/restart.
+- Validation:
+  - `node --check sketch.js` passed.
+  - `node --check js/config.js` passed.
+  - Playwright client run still blocked locally because Chromium runtime is missing (install requires network in this environment).
