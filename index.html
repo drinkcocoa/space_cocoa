@@ -1,17 +1,33 @@
-<!DOCTYPE html><html><head>
-  <script src="p5.min.js"></script>
-  <script src="p5.dom.min.js"></script>
-  <script src="p5.sound.min.js"></script>
-  <link rel="stylesheet" type="text/css" href="style.css">
+<!DOCTYPE html>
+<html lang="en">
+<head>
   <meta charset="utf-8">
-
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Space Cocoa - Hot Cocoa for Neptune</title>
+  <script src="js/p5.min.js"></script>
+  <script src="js/p5.dom.min.js"></script>
+  <script src="js/p5.sound.min.js"></script>
+  <link rel="stylesheet" type="text/css" href="style.css">
 </head>
 
 <body>
+  <!-- Touch controls for mobile -->
+  <div class="touch-controls">
+    <div class="touch-button" id="touch-left">◄</div>
+    <div class="touch-button" id="touch-right">►</div>
+    <div class="touch-button" id="touch-forward">▲</div>
+    <div class="touch-button" id="touch-fire">●</div>
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="js/particles.js"></script>
+  <script src="js/soundManager.js"></script>
+  <script src="js/gameState.js"></script>
+  <script src="js/sceneManager.js"></script>
+  <script src="js/dialogSystem.js"></script>
+  <script src="js/asteroid.js"></script>
+  <script src="js/laser.js"></script>
+  <script src="js/ship.js"></script>
   <script src="sketch.js"></script>
-  <script src="asteroid.js"></script>
-  <script src="laser.js"></script>
-  <script src="ship.js"></script>°
-
-
-</body></html>
+</body>
+</html>

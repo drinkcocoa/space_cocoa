@@ -1,186 +1,260 @@
+// Space Cocoa - A journey to bring hot cocoa to Neptune
+// Refactored version with modular architecture
+
+// Game objects
 var ship;
 var asteroids = [];
 var lasers = [];
 
-//Scene manager values
-var nextScene = false
-var currentScene = -1;
-var Scene_nums = []
-let sun_end = false;
-var skiplock = false;
-var alpha = 0;
-let holdcocoa = false;
+// Game systems
+var sceneManager;
+var dialogSystem;
+var gameState;
+var particleSystem;
+var soundManager;
 
-var dialog = false;
-var dia_next = 0;
-var letsgo = false;
-let myTime =0
+// Assets
+let cookieFont;
+let cookieThinFont;
+let images = {};
 
-//assets
-let Cookie_font;
-let Cookie_thin_font;
-
-let img_Neptune;
-let img_Uranus;
-let img_Saturn;
-let img_Earth;
-let img_Star;
-let img_Sun;
-let img_Sunlight;
-let img_starcocoa;
-let img_onlycocoa;
-let img_hurtstar;
+// Stun state
+let stun = false;
+let stunTimer = 0;
+let hitCooldownTimer = 0;
+let hitFlashTimer = 0;
+let hitShakeTimer = 0;
 
 function preload() {
-  imageload();
-  fontload();
+  loadAssets();
 }
 
 function setup() {
   createCanvas(windowWidth, windowHeight);
-    textSize(32);
-    textFont(Cookie_font);
-    textAlign(CENTER);
-  imageload();
+  textAlign(CENTER);
+
+  // Initialize game systems
+  sceneManager = new SceneManager();
+  dialogSystem = new DialogSystem();
+  gameState = new GameState();
+  particleSystem = new ParticleSystem();
+  soundManager = new SoundManager();
+
+  // Initialize game objects
   ship = new Ship();
-  for (var i = 0; i < 15; i++) {
+  for (let i = 0; i < CONFIG.game.asteroidCount; i++) {
     asteroids.push(new Asteroid());
   }
 
+  gameState.startTime = millis();
+  soundManager.playMusic();
 }
 
 function draw() {
-  background(0, 65);
-  print(Scene_nums);
-  
-  if (letsgo == true && currentScene != -1) {
-    fill(255)
-    text('GO -->', width/2, 50);
-    }
-  print(dia_next)
-  //Title scene
-    if (currentScene == -1) {
-      letsgo = true;
-      textFont(Cookie_font);
-      push();
-      fill(255)
-    text('Space Cocoa~', windowWidth/2, 100);
-      text('Press Arrow key to move!', width/2, height-200);
-      pop();
-            
-  ship.render();
-  ship.turn();
-  ship.update();
-  ship.edges();
-  if (nextScene == true) {
-    print('wow!');
-    currentScene++;
-    reset();
+  background(0, CONFIG.game.fadeAlpha);
+
+  // Handle pause
+  if (gameState.isPaused) {
+    gameState.renderPauseMenu();
+    return;
   }
-  
-    
+
+  // Handle game over
+  if (gameState.isGameOver) {
+    gameState.renderGameOver();
+    return;
   }
-  //Neptune scene
-  if (currentScene == 0) {
-    let tremble_x = random(-1, 1);
-    let tremble_y = random(-1, 1);
-    image(img_Neptune, width - 300 + tremble_x, height/2-100 + tremble_y)
-    
-    //dialog trigger box
-    if (letsgo == false && dialog == false) {
-     push();
-      noFill();
-      stroke(255, 80);
-      rect(width-600, height/2-100, 200, 200);
-      textSize(16);
-      fill(255, 80);
-      noStroke();
-      textFont(Cookie_thin_font);
-      text('say hello in here!', width-500, height/2 + 120)
-      pop();
-    }
-    //dialog trigger
-  if (ship.pos.x > width - 600 && ship.pos.x < width - 400 && ship.pos.y > height/2 - 100 && ship.pos.y < height/2 + 100) {
-    dialog = true;
+
+  updateHitFeedback();
+
+  // Route to current scene
+  const scene = sceneManager.getCurrentScene();
+  const shouldShake = scene === CONFIG.scenes.ASTEROID && hitShakeTimer > 0;
+
+  if (shouldShake) {
+    const shakeStrength = map(
+      hitShakeTimer,
+      0,
+      CONFIG.game.hitShakeDuration,
+      0,
+      CONFIG.game.hitShakeIntensity
+    );
+    push();
+    translate(random(-shakeStrength, shakeStrength), random(-shakeStrength, shakeStrength));
+  }
+
+  // Update and render particles
+  particleSystem.update();
+  particleSystem.render();
+
+  switch(scene) {
+    case CONFIG.scenes.TITLE:
+      renderTitleScene();
+      break;
+    case CONFIG.scenes.NEPTUNE:
+      renderPlanetScene('neptune', images.Neptune, true, 'neptuneReturn');
+      break;
+    case CONFIG.scenes.ASTEROID:
+      renderAsteroidScene();
+      break;
+    case CONFIG.scenes.URANUS:
+      renderPlanetScene('uranus', images.Uranus, false, null, 'milk');
+      break;
+    case CONFIG.scenes.SATURN:
+      renderPlanetScene('saturn', images.Saturn, false, null, 'cocoa',
+        { x: width - 800, y: height/2 - 400 },
+        { x: width - 1000, y: height/2 - 200, w: 200, h: 200 });
+      break;
+    case CONFIG.scenes.EARTH:
+      renderPlanetScene('earth', images.Earth, false, null, 'cream');
+      break;
+    case CONFIG.scenes.SUN:
+      renderSunScene();
+      break;
+    case CONFIG.scenes.EARTH_RETURN:
+      renderReturnScene('earthReturn', images.Earth);
+      break;
+    case CONFIG.scenes.SATURN_RETURN:
+      renderReturnScene('saturnReturn', images.Saturn,
+        { x: width - 800, y: height/2 - 400 });
+      break;
+    case CONFIG.scenes.URANUS_RETURN:
+      renderReturnScene('uranusReturn', images.Uranus);
+      break;
+    case CONFIG.scenes.NEPTUNE_RETURN:
+      renderNeptuneReturnScene();
+      break;
+  }
+
+  if (shouldShake) {
+    pop();
+  }
+
+  renderHitFlash();
+
+  // Render UI
+  gameState.renderUI();
+
+  // Show GO prompt
+  if (sceneManager.isReadyToGo() && sceneManager.getCurrentScene() != CONFIG.scenes.TITLE) {
     push();
     fill(255);
-    ellipse(50, 50, 50, 50);
-    textSize(20);
-    
-    //dialog text
-    switch(dia_next) {
-      case 0:
-        text('Oh, Neptune! Are you OK?', ship.pos.x, ship.pos.y - 50);
-        text('Mouse click to progress', width/2, 50);
-        break;
-      case 1:
-        text('No.. I\'m too cold..', width - 300 + tremble_x - 40, height/2-50 + tremble_y - 100);
-        break;
-      case 2:
-        text('Sun is too far from me..', width - 300 + tremble_x - 40, height/2-50 + tremble_y - 100);
-        break;
-      case 3:
-        text('You need something hot..', ship.pos.x, ship.pos.y - 50);
-        break;
-        case 4:
-        text('Ah, I will make hot cocoa for you!', ship.pos.x, ship.pos.y - 50);
-        break;
-        case 5:
-        text('Really? Thank you...', width - 300 + tremble_x - 40, height/2-50 + tremble_y - 100);
-        break;
-        case 6:
-        text('But, watch out the asteroids..!', width - 300 + tremble_x - 40, height/2-50 + tremble_y - 100);
-        break;
-        case 7:
-        letsgo = true;
-        dialog = false;
-        break;
-        
-    }
-    
+    textFont(cookieFont);
+    textSize(32);
+    text(CONFIG.ui.goPrompt, width/2, 50);
     pop();
-
   }
-    
-    
-    //sceneswitcher
-  if (nextScene == true) {
-    print('wow!');
-    currentScene++;
+}
 
-    reset();
-  }
-      ship.render();
-  ship.turn();
-  ship.update();
-  ship.edges();
-    
-    
-  }
-  //asteroid scene
-  if (currentScene == 1) {
-    letsgo = true;
+function renderTitleScene() {
+  sceneManager.setReadyToGo(true);
 
-  for (var i = 0; i < asteroids.length; i++) {
-    if (ship.hits(asteroids[i])) {
-      console.log('ooops!');
-      stun = true;
-      stunned();
-      
+  push();
+  fill(255);
+  textFont(cookieFont);
+  textSize(56);
+  text(CONFIG.ui.title, windowWidth/2, 100);
+
+  textFont(cookieThinFont);
+  textSize(24);
+  text(CONFIG.ui.controls, width/2, height - 200);
+  text(CONFIG.ui.fireHint, width/2, height - 160);
+  text(CONFIG.ui.pauseHint, width/2, height - 120);
+  pop();
+
+  updateShip();
+
+  if (sceneManager.isNextSceneRequested()) {
+    sceneManager.goToNextScene();
+    resetSceneState();
+  }
+}
+
+function renderPlanetScene(planetKey, planetImage, trembles, nextDialogKey = null, ingredient = null, planetPos = null, triggerZone = null) {
+  // Default positions
+  if (!planetPos) {
+    planetPos = { x: width - 300, y: height/2 - 100 };
+  }
+
+  if (!triggerZone) {
+    triggerZone = { x: width - 600, y: height/2 - 100, w: 200, h: 200 };
+  }
+
+  // Trembling effect for Neptune
+  let trembleX = 0, trembleY = 0;
+  if (trembles) {
+    trembleX = random(-1, 1);
+    trembleY = random(-1, 1);
+  }
+
+  // Draw planet
+  image(planetImage, planetPos.x + trembleX, planetPos.y + trembleY);
+
+  // Show trigger box if dialog not started
+  if (!sceneManager.isReadyToGo() && !dialogSystem.isActive()) {
+    dialogSystem.renderTriggerBox(triggerZone.x, triggerZone.y, triggerZone.w, triggerZone.h);
+  }
+
+  // Check if ship enters trigger zone
+  if (ship.pos.x > triggerZone.x && ship.pos.x < triggerZone.x + triggerZone.w &&
+      ship.pos.y > triggerZone.y && ship.pos.y < triggerZone.y + triggerZone.h) {
+
+    if (!sceneManager.isReadyToGo() && !dialogSystem.isActive()) {
+      dialogSystem.start(planetKey);
+    }
+
+    // Render dialog
+    dialogSystem.render(ship.pos, planetPos, { x: trembleX, y: trembleY });
+
+    // Check if dialog complete
+    if (dialogSystem.isComplete()) {
+      sceneManager.setReadyToGo(true);
+      dialogSystem.end();
+
+      // Collect ingredient if specified
+      if (ingredient) {
+        gameState.collectIngredient(ingredient);
+      }
+    }
+  }
+
+  updateShip();
+
+  if (sceneManager.isNextSceneRequested()) {
+    sceneManager.goToAsteroidScene();
+    resetSceneState();
+  }
+}
+
+function renderAsteroidScene() {
+  sceneManager.setReadyToGo(true);
+  handleStun();
+
+  // Update asteroids
+  for (let i = 0; i < asteroids.length; i++) {
+    if (ship.hits(asteroids[i]) && hitCooldownTimer <= 0) {
+      triggerShipHit(asteroids[i]);
     }
     asteroids[i].render();
     asteroids[i].update();
     asteroids[i].edges();
   }
 
-  for (var i = lasers.length - 1; i >= 0; i--) {
+  // Update lasers
+  for (let i = lasers.length - 1; i >= 0; i--) {
     lasers[i].render();
     lasers[i].update();
+
     if (lasers[i].offscreen()) {
       lasers.splice(i, 1);
     } else {
-      for (var j = asteroids.length - 1; j >= 0; j--) {
+      for (let j = asteroids.length - 1; j >= 0; j--) {
         if (lasers[i].hits(asteroids[j])) {
+          // Create explosion
+          particleSystem.addExplosion(asteroids[j].pos.x, asteroids[j].pos.y, 15);
+          soundManager.playExplosion();
+          gameState.incrementAsteroidsDestroyed();
+
           if (asteroids[j].r > 10) {
             var newAsteroids = asteroids[j].breakup();
             asteroids = asteroids.concat(newAsteroids);
@@ -193,501 +267,240 @@ function draw() {
     }
   }
 
-  console.log(lasers.length);
+  updateShip();
 
-  ship.render();
-  ship.turn();
-  ship.update();
-  ship.edges();
-  
-  if (nextScene == true) {
-    print('wow!');
-    if (max(Scene_nums) > -1) {
-      //go to next Scene
-      saveScene();
+  if (sceneManager.isNextSceneRequested()) {
+    if (max(sceneManager.sceneHistory) > -1) {
+      sceneManager.goToScene(max(sceneManager.sceneHistory) + 1);
+    } else {
+      sceneManager.goToNextScene();
     }
-    else {
-    currentScene++;
-    }
-    reset();
-    }
+    resetSceneState();
   }
-  //Uranus scene
-  if(currentScene == 2) {
-    image(img_Uranus, width - 300, height/2-100);
-    
-    //dialog trigger box
-    if (letsgo == false && dialog == false) {
-     push();
-      noFill();
-      stroke(255, 80);
-      rect(width-600, height/2-100, 200, 200);
-      textSize(16);
-      fill(255, 80);
-      noStroke();
-      textFont(Cookie_thin_font);
-      text('say hello in here!', width-500, height/2 + 120);
-      pop();
-    }
-    
-        //dialog trigger
-  if (ship.pos.x > width - 600 && ship.pos.x < width - 400 && ship.pos.y > height/2 - 100 && ship.pos.y < height/2 + 100) {
-    dialog = true;
-    push();
-    fill(255);
-    ellipse(50, 50, 50, 50);
-    textSize(20);
-    
-    //dialog text
-    switch(dia_next) {
-      case 0:
-        text('Hello Uranus!', ship.pos.x, ship.pos.y - 50);
-        text('Mouse click to progress', width/2, 50);
-        break;
-      case 1:
-        text('Hi!', width - 300- 40, height/2-50 - 100);
-        break;
-      case 2:
-        text('Uranus, Can you give me some milk?', ship.pos.x, ship.pos.y - 50);
-        break;
-      case 3:
-        text('Of course! I\'m made of milk.', width - 300- 40, height/2-50 - 100);
-        break;
-        case 4:
-        text('But, why do you need that?', width - 300- 40, height/2-50 - 100);
-        break;
-        case 5:
-        text('Neptune is shivering with cold!', ship.pos.x, ship.pos.y - 50);
-        break;
-        case 6:
-        text('I\'m gonna make hot cocoa for him.', ship.pos.x, ship.pos.y - 50);
-        break;
-        case 7:
-        text('Oh, Here you are.', width - 300 - 40, height/2-50 - 100);
-        text('got fresh milk!', width/2, 80);
-        break;
-        case 8:
-        text('Thank you!!', ship.pos.x, ship.pos.y - 50);
-        break;
-        case 9:
-        letsgo = true;
-        dialog = false;
-        break;
-        
-    }
-    
-    pop();
+}
 
-  }
-        
-  ship.render();
-  ship.turn();
-  ship.update();
-  ship.edges();
-  if (nextScene == true) {
-    print('wow!');
-    //go asteroid scene
-    currentScene = 1;
-    reset();
-    }
-  }
-  
-  
-  //Saturn Scene
-  if (currentScene == 3) {
-    image(img_Saturn, width - 800, height/2-400);
-    
-    //dialog trigger box
-    if (letsgo == false && dialog == false) {
-     push();
-      noFill();
-      stroke(255, 80);
-      rect(width-1000, height/2-200, 200, 200);
-      textSize(16);
-      fill(255, 80);
-      noStroke();
-      textFont(Cookie_thin_font);
-      text('say hello in here!', width-900, height/2 + 20);
-      pop();
-    }
-    
-        //dialog trigger
-  if (ship.pos.x > width - 1000 && ship.pos.x < width - 800 && ship.pos.y > height/2 - 200 && ship.pos.y < height/2) {
-    dialog = true;
-    push();
-    fill(255);
-    ellipse(50, 50, 50, 50);
-    textSize(20);
-    
-    //dialog text
-    switch(dia_next) {
-      case 0:
-        text('Hello, Mr.Saturn!', ship.pos.x, ship.pos.y - 50);
-        text('Mouse click to progress', width/2, 50);
-        break;
-      case 1:
-        text('Long time no see!', width - 500- 40, height/2-50 - 100);
-        break;
-      case 2:
-        text('Mr.Saturn, Could you give me some cocoa, please?', ship.pos.x, ship.pos.y - 50);
-        break;
-      case 3:
-        text('Of course! I\'m made of cocoa powder.', width - 500- 40, height/2-50 - 100);
-        break;
-        case 4:
-        text('But, why do you need that?', width - 500- 40, height/2-50 - 100);
-        break;
-        case 5:
-        text('Neptune is shivering with cold!', ship.pos.x, ship.pos.y - 50);
-        break;
-        case 6:
-        text('I\'m gonna make hot cocoa for him.', ship.pos.x, ship.pos.y - 50);
-        break;
-        case 7:
-        text('That\'s a good boy!, Here you are.', width - 500 - 40, height/2-50 - 100);
-        text('got cocoa powder!', width/2, 80);
-        break;
-        case 8:
-        text('Thank you!!', ship.pos.x, ship.pos.y - 50);
-        break;
-        case 9:
-        letsgo = true;
-        dialog = false;
-        break;
-        
-    }
-    
-    pop();
+function renderSunScene() {
+  image(images.Sun, width/2, 100);
 
-  }
-        
-  ship.render();
-  ship.turn();
-  ship.update();
-  ship.edges();
-  if (nextScene == true) {
-    print('wow!');
-    //go asteroid scene
-    currentScene = 1;
-    reset();
-    }
-  }
-  
-  //Earth Scene
-  if (currentScene == 4) {
-    image(img_Earth, width - 300, height/2-100);
-    
-    //dialog trigger box
-    if (letsgo == false && dialog == false) {
-     push();
-      noFill();
-      stroke(255, 80);
-      rect(width-600, height/2-100, 200, 200);
-      textSize(16);
-      fill(255, 80);
-      noStroke();
-      textFont(Cookie_thin_font);
-      text('say hello in here!', width-500, height/2 + 120);
-      pop();
-    }
-    
-        //dialog trigger
-  if (ship.pos.x > width - 600 && ship.pos.x < width - 400 && ship.pos.y > height/2 - 100 && ship.pos.y < height/2 + 100) {
-    dialog = true;
-    push();
-    fill(255);
-    ellipse(50, 50, 50, 50);
-    textSize(20);
-    
-    //dialog text
-    switch(dia_next) {
-      case 0:
-        text('Hello, Mr.Earth!', ship.pos.x, ship.pos.y - 50);
-        text('Mouse click to progress', width/2, 50);
-        break;
-      case 1:
-        text('Hi, star!', width - 500- 40, height/2-50 - 100);
-        break;
-      case 2:
-        text('Mr.Earth, Could you give me some whipped cream, please?', ship.pos.x, ship.pos.y - 50);
-        break;
-      case 3:
-        text('Of course! I have lots of whipped cream cloud.', width - 500- 40, height/2-50 - 100);
-        break;
-        case 4:
-        text('But, why do you need that?', width - 500- 40, height/2-50 - 100);
-        break;
-        case 5:
-        text('Neptune is shivering with cold!', ship.pos.x, ship.pos.y - 50);
-        break;
-        case 6:
-        text('I\'m gonna make hot cocoa for him.', ship.pos.x, ship.pos.y - 50);
-        break;
-        case 7:
-        text('OK, Here you are!', width - 500 - 40, height/2-50 - 100);
-        text('got whipped cream cloud!', width/2, 80);
-        break;
-        case 8:
-        text('Thank you!!', ship.pos.x, ship.pos.y - 50);
-        break;
-        case 9:
-        letsgo = true;
-        dialog = false;
-        break;
-        
-    }
-    
-    pop();
+  const triggerZone = { x: width/2 + 420, y: height/2, w: 200, h: 200 };
 
-  }
-        
-  ship.render();
-  ship.turn();
-  ship.update();
-  ship.edges();
-  if (nextScene == true) {
-    print('wow!');
-    //go asteroid scene
-    currentScene = 1;
-    reset();
-    }
-  }
-  
-    //Sun Scene
-  if (currentScene == 5) {
-    image(img_Sun, width/2, 100);
-    sun_end = true;
-    //dialog trigger box
-    if (letsgo == false && dialog == false) {
-     push();
-      noFill();
-      stroke(0, 80);
-      rect(width/2 + 420, height/2, 200, 200);
-      fill(255, 80);
-      noStroke();
-      pop();
-    }
-    
-        //dialog trigger
-  if (ship.pos.x > width/2 +420 && ship.pos.x < width/2 + 620 && ship.pos.y > height/2 && ship.pos.y < height/2 + 200) {
-    dialog = true;
-    push();
-    fill(255);
-    ellipse(50, 50, 50, 50);
-    textSize(20);
-    pop();
-        push();
-        fill(0);
-        textSize(24);
-        pop();
-    
-    //dialog text
-    switch(dia_next) {
-      case 0:
-        text('Hello, Mr.Sun!', ship.pos.x, ship.pos.y - 50);
-        text('Mouse click to progress', width/2, 50);
-        break;
-      case 1:
-        text('...Hello', width - 500- 40, height/2-50 - 100);
-        break;
-      case 2:
-        text('Could I heat up the hot cocoa here?', ship.pos.x, ship.pos.y - 50);
-        break;
-      case 3:
-        text('...Sure, you can.', width - 500- 40, height/2-50 - 100);
-        break;
-        case 4:
-        push();
-        fill(255);
-        text('Put all the ingredients..', width/2, 100);
-        pop();
-        break;
-        case 5:
-        push();
-        fill(255);
-        text('The hottest hot cocoa is done!', width/2, 100);
-        image(img_onlycocoa, ship.pos.x-40, ship.pos.y-50);
-        pop();
-        break;
-        case 6:
-        text('Thank you Mr.Sun!', ship.pos.x, ship.pos.y - 150);
-        holdcocoa = true;
-        break;
-        case 7:
-        text('...You\'re welcome.', width - 500 - 40, height/2-50 - 100);
-        break;
-        case 8:
-        letsgo = true;
-        dialog = false;
-        break;
-        
-    }
-    
+  // Check if ship enters trigger zone
+  if (ship.pos.x > triggerZone.x && ship.pos.x < triggerZone.x + triggerZone.w &&
+      ship.pos.y > triggerZone.y && ship.pos.y < triggerZone.y + triggerZone.h) {
 
-  }
-        
-  ship.render();
-  ship.turn();
-  ship.update();
-  ship.edges();
-  image(img_Sunlight, width/2, 100);
-  if (nextScene == true) {
-    print('wow!');
-    //go asteroid scene
-    currentScene = 1;
-    reset();
+    if (!sceneManager.isReadyToGo() && !dialogSystem.isActive()) {
+      dialogSystem.start('sun');
     }
-  }
-  
-  //second Earth scene
-    if (currentScene == 6) {
-      letsgo = true;
-      text('second Earth', width/2, height/2);
-    image(img_Earth, width - 300, height/2-100);
-    
-    
-        //dialog trigger
-  if (ship.pos.x > width/2) {
-    text('Wow, hot cocoa is bigger than me!', width - 500- 40, height/2-50 - 100);
 
-  }
-        
-  ship.render();
-  ship.turn();
-  ship.update();
-  ship.edges();
-  if (nextScene == true) {
-    print('wow!');
-    //go asteroid scene
-    currentScene = 1;
-    reset();
-    }
-  }
-  
-    //second Saturn scene
-    if (currentScene == 7) {
-      letsgo = true;
-    image(img_Saturn, width - 800, height/2-400);
-    
-    
-        //dialog trigger
-  if (ship.pos.x > width/2) {
-    text('What a good boy!', width - 500- 40, height/2-50 - 100);
-        
-  ship.render();
-  ship.turn();
-  ship.update();
-  ship.edges();
-  if (nextScene == true) {
-    print('wow!');
-    //go asteroid scene
-    currentScene = 1;
-    reset();
-    }
-  }
-  
-    //second Uranus scene
-    if(currentScene == 8) {
-      letsgo = true;
-    image(img_Uranus, width - 300, height/2-100);
-    
-    
-        //dialog trigger
-  if (ship.pos.x > width/2) {
-    text('That looks delicious!', width - 300- 40, height/2-50 - 100);
-        
-  ship.render();
-  ship.turn();
-  ship.update();
-  ship.edges();
-  if (nextScene == true) {
-    print('wow!');
-    //go asteroid scene
-    currentScene = 1;
-    reset();
-    }
-  }
-  
-    //second Neptune scene
-    if (currentScene == 9) {
-    let tremble_x = random(-1, 1);
-    let tremble_y = random(-1, 1);
-    image(img_Neptune, width - 300 + tremble_x, height/2-100 + tremble_y)
-    
-    //dialog trigger box
-    if (letsgo == false && dialog == false) {
-     push();
-      noFill();
-      stroke(255, 80);
-      rect(width-600, height/2-100, 200, 200);
-      textSize(16);
-      fill(255, 80);
-      noStroke();
-      textFont(Cookie_thin_font);
-      text('say hello in here!', width-500, height/2 + 120);
-      pop();
-    }
-    //dialog trigger
-  if (ship.pos.x > width - 600 && ship.pos.x < width - 400 && ship.pos.y > height/2 - 100 && ship.pos.y < height/2 + 100) {
-    dialog = true;
-    push();
-    fill(255);
-    ellipse(50, 50, 50, 50);
-    textSize(20);
-    
-    //dialog text
-    switch(dia_next) {
-      case 0:
-        text('Oh, Neptune! Are you OK?', ship.pos.x, ship.pos.y - 50);
-        text('Mouse click to progress', width/2, 50);
-        break;
-      case 1:
-        text('No.. I\'m too cold..', width - 300 + tremble_x - 40, height/2-50 + tremble_y - 100);
-        break;
-      case 2:
-        text('Sun is too far from me..', width - 300 + tremble_x - 40, height/2-50 + tremble_y - 100);
-        break;
-      case 3:
-        text('You need something hot..', ship.pos.x, ship.pos.y - 50);
-        break;
-        case 4:
-        text('Ah, I will make hot cocoa for you!', ship.pos.x, ship.pos.y - 50);
-        break;
-        case 5:
-        text('Really? Thank you...', width - 300 + tremble_x - 40, height/2-50 + tremble_y - 100);
-        break;
-        case 6:
-        text('But, watch out the asteroids..!', width - 300 + tremble_x - 40, height/2-50 + tremble_y - 100);
-        break;
-        case 7:
-        letsgo = true;
-        dialog = false;
-        break;
-        
-    }
-    
-    pop();
+    const dialogData = dialogSystem.getCurrentText();
+    if (dialogData) {
+      push();
+      fill(255);
+      textFont(cookieFont);
+      textSize(20);
 
+      if (dialogSystem.getCurrentStep() === 0) {
+        text(CONFIG.ui.progressHint, width/2, 50);
       }
+
+      if (dialogData.speaker === 'system') {
+        push();
+        fill(255);
+        textSize(24);
+        text(dialogData.text, width/2, 100);
+        pop();
+
+        // Show cocoa image on step 5
+        if (dialogSystem.getCurrentStep() === 5) {
+          image(images.onlycocoa, ship.pos.x - 40, ship.pos.y - 50);
+        }
+      } else if (dialogData.speaker === 'ship') {
+        text(dialogData.text, ship.pos.x, ship.pos.y - (dialogSystem.getCurrentStep() === 6 ? 150 : 50));
+        if (dialogSystem.getCurrentStep() === 6) {
+          gameState.setHoldingCocoa(true);
+        }
+      } else {
+        text(dialogData.text, width - 540, height/2 - 150);
+      }
+      pop();
+    }
+
+    if (dialogSystem.isComplete()) {
+      sceneManager.setReadyToGo(true);
+      dialogSystem.end();
+      gameState.collectIngredient('heated');
     }
   }
-      
-    
-    
-    //sceneswitcher
-  if (nextScene == true) {
-    print('wow!');
-    currentScene++;
 
-    reset();
+  updateShip();
+  image(images.Sunlight, width/2, 100);
+
+  if (sceneManager.isNextSceneRequested()) {
+    sceneManager.goToAsteroidScene();
+    resetSceneState();
   }
-      ship.render();
+}
+
+function renderReturnScene(dialogKey, planetImage, planetPos = null) {
+  sceneManager.setReadyToGo(true);
+
+  if (!planetPos) {
+    planetPos = { x: width - 300, y: height/2 - 100 };
+  }
+
+  image(planetImage, planetPos.x, planetPos.y);
+
+  if (ship.pos.x > width/2) {
+    push();
+    fill(255);
+    textFont(cookieFont);
+    textSize(20);
+    const dialog = CONFIG.dialogs[dialogKey];
+    if (dialog && dialog[0]) {
+      text(dialog[0].text, planetPos.x - 260, planetPos.y - 150);
+    }
+    pop();
+  }
+
+  updateShip();
+
+  if (sceneManager.isNextSceneRequested()) {
+    sceneManager.goToAsteroidScene();
+    resetSceneState();
+  }
+}
+
+function renderNeptuneReturnScene() {
+  let trembleX = random(-1, 1);
+  let trembleY = random(-1, 1);
+  image(images.Neptune, width - 300 + trembleX, height/2 - 100 + trembleY);
+
+  const triggerZone = { x: width - 600, y: height/2 - 100, w: 200, h: 200 };
+
+  if (!sceneManager.isReadyToGo() && !dialogSystem.isActive()) {
+    dialogSystem.renderTriggerBox(triggerZone.x, triggerZone.y, triggerZone.w, triggerZone.h);
+  }
+
+  if (ship.pos.x > triggerZone.x && ship.pos.x < triggerZone.x + triggerZone.w &&
+      ship.pos.y > triggerZone.y && ship.pos.y < triggerZone.y + triggerZone.h) {
+
+    if (!sceneManager.isReadyToGo() && !dialogSystem.isActive()) {
+      dialogSystem.start('neptuneReturn');
+    }
+
+    dialogSystem.render(ship.pos, { x: width - 300, y: height/2 - 50 }, { x: trembleX, y: trembleY });
+
+    if (dialogSystem.isComplete()) {
+      sceneManager.setReadyToGo(true);
+      gameState.win();
+      dialogSystem.end();
+    }
+  }
+
+  updateShip();
+
+  if (sceneManager.isNextSceneRequested()) {
+    sceneManager.goToNextScene();
+    resetSceneState();
+  }
+}
+
+function updateShip() {
+  ship.render();
   ship.turn();
   ship.update();
   ship.edges();
-    
-    
+
+  // Add thruster particles when boosting
+  if (ship.isBoosting && frameCount % 3 === 0) {
+    const angle = ship.heading + PI;
+    const particleX = ship.pos.x + cos(angle) * ship.r;
+    const particleY = ship.pos.y + sin(angle) * ship.r;
+    particleSystem.addTrail(particleX, particleY, color(255, 150, 50));
   }
+}
+
+function getFrameDeltaMs() {
+  if (typeof window.deltaTime === 'number' && isFinite(window.deltaTime)) {
+    return window.deltaTime;
+  }
+  return 1000 / 60;
+}
+
+function updateHitFeedback() {
+  const frameDelta = getFrameDeltaMs();
+
+  if (hitCooldownTimer > 0) {
+    hitCooldownTimer = max(0, hitCooldownTimer - frameDelta);
+  }
+  if (hitFlashTimer > 0) {
+    hitFlashTimer = max(0, hitFlashTimer - frameDelta);
+  }
+  if (hitShakeTimer > 0) {
+    hitShakeTimer = max(0, hitShakeTimer - frameDelta);
+  }
+}
+
+function renderHitFlash() {
+  if (hitFlashTimer <= 0) {
+    return;
+  }
+
+  push();
+  noStroke();
+  const alpha = map(
+    hitFlashTimer,
+    0,
+    CONFIG.game.hitFlashDuration,
+    0,
+    CONFIG.game.hitFlashAlpha
+  );
+  fill(255, 40, 40, alpha);
+  rect(0, 0, width, height);
+  pop();
+}
+
+function triggerShipHit(asteroid) {
+  stun = true;
+  stunTimer = 0;
+  hitCooldownTimer = CONFIG.game.hitCooldownDuration;
+  hitFlashTimer = CONFIG.game.hitFlashDuration;
+  hitShakeTimer = CONFIG.game.hitShakeDuration;
+  gameState.takeDamage(CONFIG.game.hitDamage);
+  soundManager.playHit();
+  particleSystem.addExplosion(ship.pos.x, ship.pos.y, 10, color(255, 100, 100));
+
+  const knockback = p5.Vector.sub(ship.pos, asteroid.pos);
+  if (knockback.magSq() > 0) {
+    knockback.setMag(CONFIG.game.hitKnockbackForce);
+    ship.vel.add(knockback);
+  }
+}
+
+function handleStun() {
+  if (stun) {
+    const frameDelta = getFrameDeltaMs();
+    stunTimer += frameDelta;
+    if (stunTimer >= CONFIG.game.stunDuration) {
+      stun = false;
+      stunTimer = 0;
+    }
+  }
+}
+
+function resetSceneState() {
+  sceneManager.setReadyToGo(false);
+  dialogSystem.end();
+  sceneManager.reset();
+  resetHitFeedback();
+}
+
+function resetHitFeedback() {
+  stun = false;
+  stunTimer = 0;
+  hitCooldownTimer = 0;
+  hitFlashTimer = 0;
+  hitShakeTimer = 0;
 }
 
 function keyReleased() {
@@ -696,69 +509,132 @@ function keyReleased() {
 }
 
 function keyPressed() {
-  if (key == ' ') {
-    lasers.push(new Laser(ship.pos, ship.heading));
-  } else if (keyCode == RIGHT_ARROW) {
-    ship.setRotation(0.1);
-  } else if (keyCode == LEFT_ARROW) {
-    ship.setRotation(-0.1);
-  } else if (keyCode == UP_ARROW) {
+  // Game controls
+  if (key === ' ') {
+    if (dialogSystem.isActive()) {
+      dialogSystem.next();
+    }
+  } else if (keyCode === RIGHT_ARROW) {
+    ship.setRotation(CONFIG.game.shipRotationSpeed);
+  } else if (keyCode === LEFT_ARROW) {
+    ship.setRotation(-CONFIG.game.shipRotationSpeed);
+  } else if (keyCode === UP_ARROW) {
     ship.boosting(true);
   }
-}
 
-//progress dialog by mouse click
-function mousePressed() {
-  if (dialog == true && skiplock == false) {
-  dia_next++
+  // Pause
+  if (key === 'p' || key === 'P') {
+    if (!gameState.isGameOver) {
+      gameState.togglePause();
+      if (gameState.isPaused) {
+        soundManager.pauseMusic();
+      } else {
+        soundManager.resumeMusic();
+      }
+    }
+  }
+
+  // Restart
+  if (key === 'r' || key === 'R') {
+    restartGame();
   }
 }
 
-//reset the values
-function reset() {
-  letsgo = false;
-  dialog = false;
-  nextScene = false;
-  dia_next = 0;
-}
+function restartGame() {
+  // Reset all systems
+  gameState.restart();
+  sceneManager = new SceneManager();
+  dialogSystem = new DialogSystem();
+  particleSystem.clear();
 
-//go to the next Scene
-function saveScene() {
-  currentScene = max(Scene_nums) + 1;
-    print('haha!')
-  
-}
+  // Reset game objects
+  ship = new Ship();
+  asteroids = [];
+  lasers = [];
+  for (let i = 0; i < CONFIG.game.asteroidCount; i++) {
+    asteroids.push(new Asteroid());
+  }
 
-//load fonts
-function fontload() {
-    Cookie_font = loadFont('CookieRun_bold.ttf');
-    Cookie_thin_font = loadFont('CookieRun.ttf');
-}
+  resetHitFeedback();
 
-//load images
-function imageload() {
-  img_Star = loadImage('Star.png');
-  img_starcocoa = loadImage('starcocoa.png')
-  img_Saturn = loadImage('Saturn.png');
-  img_Neptune = loadImage('Neptune.png');
-  img_Uranus = loadImage('Uranus.png');
-  img_Earth = loadImage('Earth.png');
-  img_Sun = loadImage('Sun.png');
-  img_Sunlight = loadImage('Sunlight.png');
-  img_onlycocoa = loadImage('onlycocoa.png');
-  img_hurtstar = loadImage('hurtstar.png');
+  gameState.startTime = millis();
+  soundManager.playMusic();
 }
-
 
 function windowResized() {
   resizeCanvas(windowWidth, windowHeight);
 }
 
-function stunned() {
-  if (stun == true) {
-    myTime += deltaTime;
-    if (myTime % 2000 == 0) {
-      stun = false;
-    }
+function loadAssets() {
+  // Load fonts
+  cookieFont = loadFont('assets/fonts/CookieRun_bold.ttf');
+  cookieThinFont = loadFont('assets/fonts/CookieRun.ttf');
+
+  // Load images
+  images.Star = loadImage('assets/images/Star.png');
+  images.starcocoa = loadImage('assets/images/starcocoa.png');
+  images.Saturn = loadImage('assets/images/Saturn.png');
+  images.Neptune = loadImage('assets/images/Neptune.png');
+  images.Uranus = loadImage('assets/images/Uranus.png');
+  images.Earth = loadImage('assets/images/Earth.png');
+  images.Sun = loadImage('assets/images/Sun.png');
+  images.Sunlight = loadImage('assets/images/Sunlight.png');
+  images.onlycocoa = loadImage('assets/images/onlycocoa.png');
+  images.hurtstar = loadImage('assets/images/hurtstar.png');
+
+  // Load sounds (when available)
+  // soundManager.loadSounds();
+
+  // Setup touch controls after DOM loads
+  setupTouchControls();
+}
+
+// Touch control setup for mobile devices
+function setupTouchControls() {
+  const touchLeft = document.getElementById('touch-left');
+  const touchRight = document.getElementById('touch-right');
+  const touchForward = document.getElementById('touch-forward');
+  const touchFire = document.getElementById('touch-fire');
+
+  if (touchLeft) {
+    touchLeft.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      ship.setRotation(-CONFIG.game.shipRotationSpeed);
+    });
+    touchLeft.addEventListener('touchend', (e) => {
+      e.preventDefault();
+      ship.setRotation(0);
+    });
+  }
+
+  if (touchRight) {
+    touchRight.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      ship.setRotation(CONFIG.game.shipRotationSpeed);
+    });
+    touchRight.addEventListener('touchend', (e) => {
+      e.preventDefault();
+      ship.setRotation(0);
+    });
+  }
+
+  if (touchForward) {
+    touchForward.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      ship.boosting(true);
+    });
+    touchForward.addEventListener('touchend', (e) => {
+      e.preventDefault();
+      ship.boosting(false);
+    });
+  }
+
+  if (touchFire) {
+    touchFire.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      if (dialogSystem.isActive()) {
+        dialogSystem.next();
+      }
+    });
   }
 }
